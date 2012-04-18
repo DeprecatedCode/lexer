@@ -22,6 +22,7 @@ module.exports = function(string, grammar, context) {
 	 * Store tokens
 	 */
 	var tokens = [];
+	var token = context;
 	var chr = '';
 
 	/**
@@ -130,8 +131,8 @@ module.exports = function(string, grammar, context) {
 								scan = false;
 							}
 							
-							var actual_token = tokens[index]->name;
-							var actual_value = tokens[index]->value;
+							var actual_token = tokens[index].name;
+							var actual_value = tokens[index].value;
 							
 							if(match_token == '*') {
 								scan = true;
@@ -274,7 +275,7 @@ module.exports = function(string, grammar, context) {
 		}
 		
 		// Add the current token to the stack and handle queue
-		tokens.push('name': token, 'value': queue, 'line': tokenLine, 'col': tokenCol});
+		tokens.push({'name': token, 'value': queue, 'line': tokenLine, 'col': tokenCol});
 		
 		// Update line and column for next token
 		tokenLine = lineNumber;
