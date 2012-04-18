@@ -110,14 +110,11 @@ module.exports = function(string, grammar, context) {
 						var seq = condtoken['match-sequence'];
 						var index = count(tokens) - 1;
 						
-						
-						/* DEBUG * /
-							echo "<h2>Checking <code>token</code> conditional token</h2>";
-						/* END DEBUG */
-						
 						var first = true;
 						var scan = false;
 						var startIndex = 0;
+
+						match_token_loop:
 						for(match_token in condtoken['match-sequence']) {
 							var match_value = condtoken['match-sequence'][match_token];
 							
@@ -127,14 +124,14 @@ module.exports = function(string, grammar, context) {
 									if(first)
 										startIndex = index;
 									if(index < startIndex)
-										break 2;
+										break xtoken_loop;
 								}
 								first = false;
 								scan = false;
 							}
 							
-							actual_token = tokens[index]->name;
-							actual_value = tokens[index]->value;
+							var actual_token = tokens[index]->name;
+							var actual_value = tokens[index]->value;
 							
 							if(match_token == '*') {
 								scan = true;
@@ -142,20 +139,15 @@ module.exports = function(string, grammar, context) {
 								continue;
 							}
 							
-							/* DEBUG * /
-								echo "<p>Comparing match token <strong>match_token</strong> with actual <strong>actual_token</strong>
-								and expected value <strong>match_value</strong> with <strong>actual_value</strong></p>";
-							/* END DEBUG */
-							
 							if(actual_token != match_token || actual_value != match_value)
-								continue 2;
+								continue xtoken_loop;
 							index++;
 						}
 						
 						/**
 						 * The condition token is matched
 						 */
-						if(isset(condtoken['token'])) {
+						if(typeof condtoken['token'] != 'undefined') {
 							switch(condtoken['token']) {
 								case 'cdata-block':
 									
@@ -164,13 +156,13 @@ module.exports = function(string, grammar, context) {
 									 */
 									token = condtoken['token'];
 									start = pointer;
-									pointer = strpos(source, condtoken['end'], start);
+									pointer = source.indexOf(condtoken['end'], start);
 									if(pointer === false)
-										pointer = strlen(source);
-									chr .= substr(source, start, pointer - start);
-									len = strlen(chr);
+										pointer = source.length;
+									chr += source.substr(start, pointer - start);
+									var len = chr.length;
 									for(i = 0; i < len; i++) {
-										cx = substr(chr, i, 1);
+										cx = chr.charAt(i);
 										
 										// Increment line count
 										if(cx == "\n" || cx == "\r") {
@@ -181,18 +173,18 @@ module.exports = function(string, grammar, context) {
 										// Increment column count
 										colNumber++;
 									}
-									break 3;
+									break xtoken_loop;
 							}
 						}
 					}
 					
 					// If no conditional match found, throw exception
-					throw new Exception("Tokenize Error: The tokenizer has encountered a conditional token `<i>token</i>` ".
+					throw new Error("Tokenize Error: The tokenizer has encountered a conditional token `<i>token</i>` " +
 						"that has no valid match in `description`");
 					
 				default:
-					throw new Exception("Tokenize Error: The tokenizer has encountered an invalid token type `<i>xtoken[type]`
-						after token `<i>token</i>` in `description`");
+					throw new Error("Tokenize Error: The tokenizer has encountered an invalid token type `<i>xtoken[type]` " +
+						"after token `<i>token</i>` in `description`");
 			
 			}
 		}
@@ -201,9 +193,7 @@ module.exports = function(string, grammar, context) {
 		 * Handle last token
 		 */
 		if(chr === false) {
-			tokens[] = (object) array('name' => token, 'value' => queue,
-				'line' => tokenLine, 'col' => tokenCol);
-				
+			tokens.push({'name': token, 'value': queue, 'line': tokenLine, 'col': tokenCol});
 			break;
 		}
 		
@@ -214,35 +204,37 @@ module.exports = function(string, grammar, context) {
 			checkchar = chr;
 		
 		// Check if the current token has an action for this char, both literal and *
-		literal = isset(xtoken[checkchar]);
-		star = isset(xtoken['*']);
-		xmatch = false;
-		xqueue = '';
+		var literal = typeof xtoken[checkchar] != 'undefined';
+		var star = typeof xtoken['*'] != 'undefined';
+		var xmatch = false;
+		var xqueue = '';
 
 		// Extended cases
-		if(isset(xtoken['extended'])) {
+		if(typeof xtoken['extended'] != 'undefined') {
 			
 			// Save pointer to reset
 			oldPointer = pointer;
 
-			foreach(xtoken['extended'] as match => qtoken) {
-				sample = '';
+			xtoken_extended_loop:
+			for(var match in xtoken['extended']) {
+				var qtoken = xtoken['extended'];
+				var sample = '';
 				while(sample !== false) {
-					sample = substr(source, ++pointer, strlen(match));
+					sample = source.substr(++pointer, match.length);
 					if(sample == match) {
 
 						/**
 						 * Add the content before the match
 						 * @author Nate Ferrero
 						 */
-						queue .= substr(source, oldPointer, pointer - oldPointer);
+						queue += source.substr(oldPointer, pointer - oldPointer);
 
 						xmatch = true;
 						ntoken = qtoken;
-						xqueue = substr(source, pointer + 1, strlen(match) - 1);
-						pointer += strlen(match);
+						xqueue = source.substr(pointer + 1, match.length - 1);
+						pointer += match.length;
 
-						break 2;
+						break xtoken_extended_loop;
 					}
 				}
 
@@ -256,7 +248,7 @@ module.exports = function(string, grammar, context) {
 
 			// If no match, char is part of token and continue
 			if(!literal && !star) {
-				queue .= chr;
+				queue += chr;
 				continue;
 			}
 			
@@ -266,32 +258,31 @@ module.exports = function(string, grammar, context) {
 
 		// Handle '#drop' token
 		if(ntoken === '#drop') {
-			continue;	
+			continue;
 		}
 		
 		// Handle '#self' token
 		if(ntoken === '#self') {
-			queue .= chr;
-			continue;	
+			queue += chr;
+			continue;
 		}
 		
 		// Handle '#error' token
 		if(ntoken === '#error') {
-			throw new LexerSyntaxException("Syntax Error: Unexpected <code><b>'chr'</b></code>
-				after `<i>token</i>` token `queue` on line lineNumber at column colNumber in `description`");
+			throw new Error("Syntax Error: Unexpected <code><b>'chr'</b></code> " + 
+				"after `<i>token</i>` token `queue` on line " + lineNumber + " at column " + colNumber + " in `description`");
 		}
 		
 		// Add the current token to the stack and handle queue
-		tokens[] = (object) array('name' => token, 'value' => queue,
-			'line' => tokenLine, 'col' => tokenCol);
+		tokens.push('name': token, 'value': queue, 'line': tokenLine, 'col': tokenCol});
 		
 		// Update line and column for next token
 		tokenLine = lineNumber;
 		tokenCol = colNumber;
 		
 		// Handle &tokens by immediately queueing the same char on the new token
-		if(substr(ntoken, 0, 1) === '&') {
-			token = substr(ntoken, 1);
+		if(ntoken.charAt(0) === '&') {
+			token = ntoken.substr(1);
 			processImmediately = true;
 			queue = '';
 		}
@@ -301,7 +292,7 @@ module.exports = function(string, grammar, context) {
 			token = ntoken;
 
 			// xqueue adds any special characters after the first character of the token (see above)
-			queue = chr . xqueue;
+			queue = chr + xqueue;
 		}
 	}
 	
